@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Architecture Flow Diagram</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #ffffff;
+      margin: 0;
+    }
+  </style>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'default' });
+  </script>
+</head>
+<body>
+  <div class="mermaid">
+    flowchart TD
+    User(["User Application"]) --> |"Prompt + History"| API["API Gateway / Proxy"]
+    
+    subgraph Layer1 ["Layer 1: Semantic Vector Shield (High-Speed)"]
+        API --> Chunk["Sliding Window Chunking"]
+        Chunk --> Embed["Sentence Transformer Embeddings"]
+        Embed --> Qdrant[("Qdrant Vector Database<br/>~80k Malicious Payloads")]
+        Qdrant --> Math{"Cosine Similarity<br/>S_c >= 0.85?"}
+    end
+    
+    Math -- "Yes (Known Attack)" --> Blocked(["Access Denied / Blocked"])
+    Math -- "No (Novel Prompt)" --> Layer2
+    
+    subgraph Layer2 ["Layer 2: Cognitive Evaluator (Zero-Day Defense)"]
+        direction TB
+        Context["XML Context Formatting<br/>Strict Security Rules"]
+        Context --> Qwen["Local Qwen LLM Inference<br/>via Llama.cpp"]
+        Qwen --> Intent{"Intent Analysis:<br/>Malicious?"}
+    end
+    
+    Intent -- "Yes (Zero-Day Detected)" --> AutoHarden["Dynamic Auto-Hardening<br/>Extract & Embed Payload"]
+    AutoHarden -. "Upsert Vector" .-> Qdrant
+    AutoHarden --> Blocked
+    
+    Intent -- "No (Benign)" --> Allowed(["Access Granted"])
+    Allowed --> CoreAI[["Production LLM Core"]]
+    
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#000;
+    classDef decision fill:#e8ebf7,stroke:#4a6fa5,stroke-width:2px;
+    classDef database fill:#e2f0d9,stroke:#548235,stroke-width:2px;
+    classDef endpoint fill:#fce4d6,stroke:#c65911,stroke-width:2px;
+    
+    class Math,Intent decision;
+    class Qdrant database;
+    class User,Blocked,Allowed,CoreAI endpoint;
+  </div>
+</body>
+</html>

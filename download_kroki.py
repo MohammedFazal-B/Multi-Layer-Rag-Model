@@ -1,0 +1,8 @@
+import urllib.request
+
+url = "https://kroki.io/plantuml/png/eNplVNtqGzEQfddXDNuXluL0AoXihzS-pEmoHRzc9Gb6MJEma2GtZCSt7aX03zvSri_FhhXozGHmnDnCVyGij3VlRFhpu0aPFSzRqq3XMZKFZzSBTmqVs04uvavorLRGucKS5rExBJ5kRFsaEgJldB6Kx0AeBuu10RKjdrYADJBAYZ0iKAazO7jBSFts4A3MvNs1mcK4EF1vKCbYcJt3fZhThTZqCd8o958vNRlVwB8B_FvMjVbalvBdW-W2MFrWloWWv1PHfOloZNmlJPjq0YZn5yvymXNdPZHKHIURnzDw7AfFpLgfOB5meS2YmUvaYeksFCMXtCW4hLcXHz98yrQpxqX4e2bkfR9GrrQ66g3B9QZNjdz74OLHdMJ1lriL8JnFYYwHEy3c8iZOooGHLQc2mUxzPV3-V3WXrEZWwgloV4dWWIsmaYuBlBQCjMlqUvByaJxckXqV23UXsRg3Fite-6COrneLXjG7k5SgFjn0uknLIdWWjXFbbiGNqxUUnLCqZXoJSTP78VS0xjwNOPL8Xnq9y_QAoJ8eRLWO8BpudeAVNSLBqdymmc98b5PLZ753AXXhJSRnIdIJvcULz_IY7AzypJ8U-vDFuq2FQYyc14FaeiKbyPtM-nDv0rch0wkUYl_Ls1MIOZZ061YtuiCOs4-L24__Rd71xsguj6WLvRcmPa55OxFm2BiH6pR15uh03sFAl0VnYMgZllbswbzVNoUrsir9OfwDsnhbwQ=="
+req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+with urllib.request.urlopen(req) as response:
+    with open(r'C:\Users\moham\.gemini\antigravity-ide\brain\71b23608-765c-4b98-b7a9-9c12eb01411a\system_architecture.png', 'wb') as out_file:
+        out_file.write(response.read())
+print("Downloaded PNG successfully!")

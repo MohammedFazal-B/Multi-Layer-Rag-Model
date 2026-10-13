@@ -1,0 +1,9 @@
+datasets
+pandas
+pyarrow
+sentence-transformers
+qdrant-client
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.4.0+cu121
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+llama-cpp-python

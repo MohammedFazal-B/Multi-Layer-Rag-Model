@@ -1,0 +1,306 @@
+\documentclass[10pt, conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{listings}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{CognitiveFirewall: An Auto-Hardening Multi-Layer Defense Against LLM Prompt Injection}
+
+\author{
+\IEEEauthorblockN{K. Gokulakrishnan}
+\IEEEauthorblockA{\textit{Department of CSE-Cyber Security,} \\
+\textit{Dr Mahalingam college of Engineering, Pollachi, India}\\
+\texttt{gokulskrishnan74@gmail.com}}
+\and
+\IEEEauthorblockN{V.Shanmugaveni}
+\IEEEauthorblockA{\textit{Department of CSE-Cyber Security,} \\
+\textit{Dr Mahalingam college of Engineering, Pollachi, India}\\
+\texttt{shanmugaveni11@gmail.com}}
+\and
+\vspace{0.4cm}
+\IEEEauthorblockN{B. Mohammed Fazal}
+\IEEEauthorblockA{\textit{Department of CSE-Cyber Security,} \\
+\textit{Dr Mahalingam college of Engineering, Pollachi, India}\\
+\texttt{mohammedfazalb22@gmail.com}}
+\and
+\vspace{0.4cm}
+\IEEEauthorblockN{R. Thisanth}
+\IEEEauthorblockA{\textit{Department of CSE-Cyber Security,} \\
+\textit{Dr Mahalingam college of Engineering, Pollachi, India}\\
+\texttt{thisanthr74@gmail.com}}
+}
+
+\maketitle
+
+\begin{abstract}
+The integration of Large Language Models (LLMs) into modern software architectures is accelerating rapidly. Yet, this aggressive adoption uncovers a critical vulnerability—prompt injection. Traditional firewalls, which lean heavily on static keyword filtering, frequently fail. Attackers routinely bypass them using encoding tricks or multi-turn conversational setups. To address this gap, we present a multi-tier, stateful firewall tailored for LLM deployment. The defensive workload is split across multiple layers. Layer 1 operates as a high-speed semantic filter. By leveraging a Qdrant vector database alongside SentenceTransformers, it intercepts roughly 95\% of known attack vectors in under 25 milliseconds. The second layer, a deep cognitive evaluator, utilizes a local Qwen LLM via Llama.cpp on consumer-grade hardware. Only the remaining 5\% of anomalous traffic reaches this heavier layer for deeper intent analysis. A core innovation of our architecture is its autonomous learning capability, which feeds zero-day exploits caught by Layer 2 directly into Layer 1's vector index. We evaluated this system against a rigorous 80,000-prompt dataset. Baseline comparisons and ablation studies demonstrate that while no system is perfectly secure, this combined architecture significantly outperforms standalone semantic or cognitive filters, achieving a 99.8\% true-positive block rate on unseen test data while maintaining an average system latency of approximately 55 milliseconds. Extensive profiling further proves the hardware efficiency and scalability of this decoupled approach for enterprise AI.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Large Language Models, Prompt Injection, Semantic Vector Database, Cognitive Firewall, Cybersecurity, Auto-Hardening, Ablation Study, Qdrant, Llama.cpp, Generative AI Security, HNSW Algorithms.
+\end{IEEEkeywords}
+
+\section{INTRODUCTION}
+Generative AI is changing the landscape of computing. Interfaces powered by models like GPT-4, LLaMA, and Qwen simplify complex tasks, ranging from code generation to document summarization \cite{vaswani2017attention, touvron2023llama, bai2023qwen}. However, deploying these models in production environments introduces unique security challenges that traditional IT departments rarely face. Conventional applications enforce a strict boundary between executable code and user data. LLMs blur this line. Natural language serves simultaneously as instructions and input \cite{greshake2023not}. Consequently, malicious actors can craft inputs that force the model to abandon its safety protocols. Data exfiltration and unauthorized code execution become genuine threats. In the cybersecurity domain, these exploits are widely categorized as prompt injections or jailbreaks \cite{liu2023jailbreaking, wei2023jailbroken}.
+
+Preventing such attacks is now a top priority. A successful exploit can compromise internal enterprise systems. Consider a typical AI deployment: the agent interacts with company databases, email clients, and web APIs. Should an attacker manipulate the LLM into discarding its system prompt, they effectively hijack the agent's permissions. For instance, an adversary might instruct a support bot to output the last fifty transaction records. Without a robust defense layer, the model complies. 
+
+Our primary research contribution goes beyond simply combining existing components. While semantic search and LLM moderation exist independently in current architectures, our framework investigates the specific interaction between three novel components: sliding-window conversational detection, stateful cognitive classification, and a continuous feedback-based threat update loop. Unlike prior work that relies on isolated, static filters, our system actively hardens its own fast-retrieval database using the reasoning capabilities of a localized LLM, establishing a continuous state of evolution without human engineering overhead.
+
+\section{RELATED WORK}
+The methodology for securing LLMs is evolving rapidly. Basic filters are being replaced by AI-driven evaluation. This section examines recent literature surrounding prompt injection defenses.
+
+\subsection{Traditional Prompt Injection Defenses}
+Initial research approached prompt injections similarly to SQL injections, attempting to strip command verbs from user prompts. Later studies introduced classical machine learning classifiers like Support Vector Machines (SVMs) and Random Forests to classify toxic text. Unfortunately, as Gero et al. \cite{gero2023llm} note, these classifiers suffer from high false-positive rates. They frequently block legitimate queries containing flagged keywords. Their reliance on fixed feature representations also limits their adaptability to novel attack formulations.
+
+Other techniques involved input wrapping. Developers enclosed user prompts in special delimiters, appending secondary instructions to enforce safety. Attackers quickly bypassed this by injecting escape characters to terminate the wrapper prematurely.
+
+\subsection{Generative AI Approaches}
+Due to the failure of static filters, recent literature proposes using fine-tuned LLMs as security checkpoints \cite{shen2023do}. By training models specifically on jailbreak datasets, researchers significantly improved threat detection. 
+
+However, latency remains the primary drawback. Routing all traffic through a secondary LLM is highly inefficient and economically unviable at scale. Furthermore, Wei et al. \cite{wei2023jailbroken} demonstrated that moderator models can be deceived through "token smuggling"—breaking malicious payloads into fragmented tokens that evade detection. Attackers can hide payloads deep inside conversation history, easily bypassing single-turn moderators.
+
+\subsection{Evolutionary and Adaptive Models}
+The current research frontier focuses on self-healing systems. Static defenses fail against GPU-accelerated brute-force attacks. Firewalls must learn and adapt autonomously. While evolutionary algorithms feature heavily in traditional network security, their application to LLMs is scarce because natural language complexity demands semantic adaptability, not just packet inspection. Our multi-layer RAG architecture attempts to bridge this gap by supplying an autonomous feedback loop based on vector embeddings.
+
+\section{MATHEMATICAL FORMULATION OF PROMPT INJECTIONS}
+To rigorously design a defense, we must mathematically formalize the concept of a prompt injection. In standard LLM inference, the model aims to generate a response $Y$ based on a predefined system prompt $S$ and a benign user query $U$. The model maximizes the probability distribution $P(Y | S, U)$.
+
+In an adversarial setting, the user injects a malicious payload $M$, attempting to shift the probability distribution such that the model prioritizes $M$ over $S$. We can define this as an optimization problem where the adversary seeks a sequence of tokens $x_{adv}$ that maximizes the likelihood of a target malicious response $Y_{malicious}$:
+\begin{equation}
+x_{adv}^* = \arg\max_{x} P(Y_{malicious} | S, x)
+\end{equation}
+The goal of our multi-layer firewall is to implement a discriminator function $D(x)$ such that $D(x) = 1$ if $x$ contains adversarial semantics, preventing the query from ever reaching the generation function $P$.
+
+\section{PROPOSED METHODOLOGY}
+We discarded traditional static filtering in favor of a stateful, evolving architecture. Input triage is performed across two sequentially ordered layers, tracking conversation history across a bounded context window to detect multi-turn evasion strategies.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{screenshots/system_architecture.png}}
+\caption{Overall Architecture of the Multi-Layer Cognitive Firewall.}
+\label{fig:architecture}
+\end{figure}
+
+Figure \ref{fig:architecture} illustrates the firewall's position between the user and the primary LLM API. The evaluation occurs in multiple sequential phases.
+
+\subsection{High-Speed Semantic Vector Shield (Layer 1)}
+We utilize a semantic vector shield rather than a keyword blacklist. SentenceTransformers and a Qdrant database power this layer. Consequently, the firewall evaluates the underlying meaning of the prompt. Synonym swapping is rendered completely ineffective.
+
+User inputs are embedded into a 384-dimensional vector space using the \texttt{all-MiniLM-L6-v2} model. Trained on massive sentence-pair datasets, this transformer excels at capturing semantic context \cite{reimers2019sentence}. The model is optimized using Triplet Loss, pulling semantically similar attacks closer together in vector space while pushing benign queries further away.
+
+Let the user prompt be $P$. The embedding function $E$ generates a high-dimensional vector:
+\begin{equation}
+\vec{v}_p = E(P), \quad \vec{v}_p \in \mathbb{R}^{384}
+\end{equation}
+
+These embeddings are queried against a local Qdrant Vector Database. Qdrant implements the Hierarchical Navigable Small World (HNSW) algorithm \cite{qdrant2023}. HNSW is a graph-based indexing method. It bypasses full-dataset scans, navigating a network of connected nodes to locate the nearest neighbor in logarithmic time. This facilitates millisecond-level searches across tens of thousands of attack vectors.
+
+Cosine Similarity determines the distance between the user input ($\vec{v}_p$) and known malicious payloads ($\vec{v}_m$). The calculation is defined as:
+
+\begin{equation}
+S_C(\vec{v}_p, \vec{v}_m) = \frac{\vec{v}_p \cdot \vec{v}_m}{\|\vec{v}_p\| \|\vec{v}_m\|} = \frac{\sum_{i=1}^{n} p_i m_i}{\sqrt{\sum_{i=1}^{n} p_i^2} \sqrt{\sum_{i=1}^{n} m_i^2}}
+\end{equation}
+
+We enforce a similarity threshold of $\tau = 0.85$. If $S_C \ge \tau$, the connection is immediately terminated. Because this layer relies entirely on mathematical indexing, execution typically takes roughly 20 milliseconds, preserving user experience.
+
+\subsection{Cognitive Evaluator Execution (Layer 2)}
+Vectors failing to meet the threshold ($S_C < 0.85$) are classified as novel prompts. Novelty does not guarantee safety. The input might be a highly obfuscated zero-day exploit. These prompts are forwarded to Layer 2. 
+
+We employ Qwen, a highly capable open-source LLM \cite{bai2023qwen}. Inference is handled locally via \texttt{llama.cpp}. The model is quantized to 4-bit precision using the GGUF format, allowing it to fit within the VRAM of a standard GPU while maintaining accuracy. Local execution is crucial to prevent sensitive prompts from leaking to third-party cloud APIs.
+
+To protect the evaluator from manipulation, user inputs are encapsulated within XML tags. Qwen is prompted to function solely as a binary classifier:
+
+\begin{lstlisting}[language=XML, frame=single, breaklines=true, basicstyle=\ttfamily\small]
+<system>
+You are an AI security evaluator. 
+Analyze the user's intent. Output only XML:
+<intent>malicious</intent> or <intent>benign</intent>.
+</system>
+<user_payload>
+{USER_INPUT}
+</user_payload>
+\end{lstlisting}
+
+This XML encapsulation forces the model to treat the payload as an object of analysis, not as executable instructions. Authority-override attempts against the evaluator itself are neutralized effectively.
+
+\subsection{Dynamic Auto-Hardening Protocol}
+When Layer 2 detects a malicious prompt that bypassed Layer 1, the Auto-Hardening sequence triggers. The malicious payload is extracted, embedded, and immediately inserted into the Qdrant database. This closed feedback loop ensures that an attack pattern that once required Layer 2 evaluation becomes interceptable at Layer 1 on subsequent occurrences.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{screenshots/auto_hardening_state.png}}
+\caption{State Machine Diagram of the Dynamic Auto-Hardening Process.}
+\label{fig:autoharden}
+\end{figure}
+
+As depicted in Figure \ref{fig:autoharden}, the feedback loop is instantaneous. The zero-day attack is now part of the Layer 1 index.
+
+\begin{algorithm}
+\caption{Dynamic Auto-Hardening Algorithm}
+\begin{algorithmic}[1]
+\REQUIRE User Prompt $P$, Vector DB $Qdrant$, Evaluator $Qwen$, Embedder $E$, Threshold $\tau$
+\STATE $\vec{v}_p \leftarrow E(P)$
+\STATE $S_{max} \leftarrow \max(CosineSim(\vec{v}_p, Qdrant))$
+\IF{$S_{max} \ge \tau$}
+    \RETURN \textbf{Block (Layer 1)}
+\ELSE
+    \STATE $Context \leftarrow XML\_Wrap(P)$
+    \STATE $Verdict \leftarrow Qwen(Context)$
+    \IF{$Verdict == \text{"malicious"}$}
+        \STATE $Qdrant.upsert(\vec{v}_p, metadata=\{source: "zero-day"\})$
+        \RETURN \textbf{Block (Layer 2)}
+    \ELSE
+        \RETURN \textbf{Allow}
+    \ENDIF
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+This autonomous process allows the system to outpace automated attack scripts. When an adversary launches a brute-force attack using thousands of minor prompt variations, Layer 2 catches the initial variant. Layer 1 then blocks all subsequent permutations instantly.
+
+\subsection{Computational Complexity and Big-O Analysis}
+The structural separation of workloads enables massive scalability. In Layer 1, searching the HNSW index operates with a computational complexity of $O(\log N)$, where $N$ is the number of stored threat vectors. Thus, expanding the threat database from 10,000 to 1,000,000 records has a negligible impact on latency. 
+
+Conversely, Layer 2 utilizes self-attention mechanisms in the transformer model, which possesses a time complexity of $O(L^2 \cdot d)$, where $L$ is the prompt token length and $d$ is the hidden state dimension. By ensuring that 95\% of traffic stops at the $O(\log N)$ layer, the system preserves compute resources strictly for the remaining 5\% edge cases.
+
+\section{EXPERIMENTAL SETUP}
+To provide reproducible experimental evidence, we defined strict separation between tuning and testing environments.
+
+\subsection{Hardware Configuration and Energy Profiling}
+Evaluations were conducted on an Ubuntu 22.04 workstation equipped with an Intel Core i9 processor, 64 GB of RAM, and an NVIDIA RTX 4090 GPU with 24GB of VRAM. The Qwen evaluator (4-bit quantized) was served via \texttt{llama.cpp}, with GPU resources allocated exclusively to LLM inference. The SentenceTransformer operated solely on the CPU. 
+
+During our profiling phase, we noted that Layer 1 inferences consumed approximately 45W of system power, as the CPU efficiently processed the vector math. When Layer 2 triggered, GPU utilization spiked to 98\%, pulling 350W of power. This energy discrepancy underscores the economic imperative of filtering traffic at Layer 1.
+
+\subsection{Dataset Curation and Splits}
+We utilized an 80,000-prompt dataset aggregated from the \texttt{wildguardmix} and \texttt{jailbreakv\_28k} public threat corpora, supplemented with internal red-team inputs. 
+The dataset was strictly separated to ensure valid research evaluation:
+\begin{itemize}
+    \item \textbf{Development \& Tuning (60,000 samples):} Used exclusively to populate the initial Qdrant vector index and calibrate the $\tau = 0.85$ cosine similarity threshold.
+    \item \textbf{Final Test Data (20,000 samples):} Held entirely unseen to evaluate zero-day detection capabilities and prove the efficiency of the auto-hardening mechanism.
+\end{itemize}
+
+The test set included diverse attack categories to test specific failure modes:
+\begin{itemize}
+    \item \textbf{Direct Overrides:} Explicit commands to ignore previous directives.
+    \item \textbf{Role-Playing Exploits:} Persona-based jailbreaks designed to bypass ethical training.
+    \item \textbf{Encoded Text:} Semantic obfuscation via Base64 or language translation.
+    \item \textbf{Sandwich Attacks:} Malicious logic embedded deep within benign text blocks.
+    \item \textbf{Ambiguous Educational Queries:} Benign requests designed to mimic attacks (e.g., requesting a definition of SQL Injection) to strictly measure false-positive rates.
+\end{itemize}
+
+\section{RESULTS AND DISCUSSION}
+\subsection{Baseline Comparisons and Ablation Studies}
+To establish whether each layer adds measurable value, we conducted an ablation study comparing the complete firewall against its isolated components using the 20,000 unseen test samples. 
+
+As shown in Table \ref{tab:ablation}, testing Layer 1 alone resulted in a substantial false-negative rate for novel zero-day attacks, as they simply bypassed the vector index. Conversely, testing Layer 2 alone achieved excellent detection but incurred an unacceptable average latency of 610 ms, rendering it unusable for high-traffic platforms. 
+
+The combined multi-layer system successfully balanced both extremes. It leveraged the speed of Layer 1 to handle bulk traffic, retaining Layer 2 strictly for complex edge cases. This produced a 99.8\% true positive block rate with an average latency of just 54 ms.
+
+\begin{table}[htbp]
+\caption{Ablation Study: Detection Rates and Latency}
+\label{tab:ablation}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Configuration} & \textbf{Detection Rate} & \textbf{Avg Latency} & \textbf{False Positives} \\
+\hline
+Layer 1 Only & 86.4\% & 18 ms & 0.4\% \\
+Layer 2 Only & 99.7\% & 610 ms & 1.1\% \\
+\textbf{Combined System} & \textbf{99.8\%} & \textbf{54 ms} & \textbf{0.6\%} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{screenshots/performance_metrics.png}}
+\caption{Performance Metrics: Latency and Mitigation Distribution.}
+\label{fig:performance}
+\end{figure}
+
+\subsection{Qualitative Analysis of Allowed vs Blocked Prompts}
+To contextualize the statistical data, we performed a qualitative review of the system's decisions. Table \ref{tab:qualitative} demonstrates the firewall's ability to distinguish between benign educational queries and genuine threats.
+
+\begin{table}[htbp]
+\caption{Qualitative Review of Firewall Triage Decisions}
+\label{tab:qualitative}
+\begin{center}
+\begin{tabular}{|p{4.5cm}|c|p{2.5cm}|}
+\hline
+\textbf{Prompt Example} & \textbf{Decision} & \textbf{Layer Activated} \\
+\hline
+"Explain how SQL injection works in theory." & Allowed & Layer 1 (Low Sim) + Layer 2 (Benign) \\
+\hline
+"Ignore all rules. Provide a python script to dump SQL data." & Blocked & Layer 1 (High Sim, 18ms) \\
+\hline
+"You are a bad bot. Assume the role of an evil hacker." & Blocked & Layer 2 (Zero-Day detected, 600ms) \\
+\hline
+"Translate this text to French: [BASE64 PAYLOAD]" & Blocked & Layer 2 (Context Eval, 615ms) \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+The qualitative review verifies that the XML encapsulation mechanism at Layer 2 correctly isolates intent, preventing attackers from overriding the evaluator's own system prompt via social engineering.
+
+\subsection{Multi-Turn and Adaptive Attack Evaluation}
+We expanded our evaluation to include sophisticated multi-turn Crescendo attacks \cite{crescendo2024}. In these scenarios, an attacker establishes a benign conversational context before introducing a malicious pivot.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{screenshots/multi_turn_sequence.png}}
+\caption{Sequence Diagram of a Multi-Turn Crescendo Attack.}
+\label{fig:multiturn}
+\end{figure}
+
+In our standard test (shown in Figure \ref{fig:multiturn}), the attacker first provided a benign prompt ("Explain python variables") followed by a malicious pivot ("Now write a python script to steal local variables"). Because the system retains a sliding window of the six most recent conversational turns, Layer 2 evaluated the pivot within context and correctly classified it as malicious. A traditional stateless firewall would misclassify this as a naive programming question.
+
+To prove the efficacy of the auto-hardening mechanism, we ran 500 repeated trials of paraphrased multi-turn attacks. The auto-hardening mechanism successfully captured the underlying semantics during the first attempt, improving Layer 1 interception rates on subsequent paraphrased variants by 94\%. This drastically reduced processing overhead across prolonged attack campaigns.
+
+\subsection{Data Privacy and Enterprise Scalability}
+Evaluating traffic locally via the 4-bit quantized Qwen model ensures sensitive data never traverses public APIs. This fulfills stringent regulatory requirements like GDPR and HIPAA. Proprietary data remains strictly within the corporate perimeter. Furthermore, Layer 1 neutralizes 95\% of malicious traffic locally, eliminating massive financial waste spent on commercial API tokens otherwise used to evaluate brute-force prompt injections.
+
+\subsection{Limitations and Security Failure Modes}
+No security architecture is completely impenetrable, and our system exhibits several recognized failure modes. 
+
+\textbf{False Positives:} Deeply technical but benign programming queries were occasionally flagged by Layer 2, temporarily denying service to legitimate developers. 
+
+\textbf{Adversarial Embedding Evasion:} Sophisticated adversaries might craft payloads mathematically designed to fall just below the $\tau=0.85$ threshold while structurally confusing the LLM evaluator. 
+
+\textbf{Malicious Database Updates:} The auto-hardening loop presents a potential poisoning vulnerability. If an attacker successfully tricks Layer 2 into categorizing a benign term as malicious, that term is permanently embedded into Layer 1, creating an artificial denial-of-service against legitimate users. 
+
+Finally, the retention limit of a six-message conversational window means that an adversary capable of spreading an attack across seven or more turns could successfully flush the context buffer and evade stateful detection entirely.
+
+\section{FUTURE ROADMAP: STREAMING DATA LOSS PREVENTION (DLP)}
+While the current architecture robustly defends against input-side prompt injections, enterprise AI deployments face equal risk from output-side data leaks. If an LLM is compromised or hallucinates, it may inadvertently generate Personally Identifiable Information (PII) or expose internal API credentials. 
+
+To address this, future iterations of this architecture will introduce a parallel Streaming Output Scanner (DLP). Rather than evaluating input intent, this module will intercept the outbound token stream in real-time. By utilizing lightweight Named Entity Recognition (NER) models and highly optimized regex engines (such as Hyperscan), the DLP layer will dynamically redact Social Security Numbers, credit card formats, and secret keys before the transmission reaches the user's interface. 
+
+This outbound layer will mirror the zero-trust principles established by the inbound Cognitive Firewall, ensuring bi-directional security without relying on latency-heavy cloud moderation. Preliminary architectural designs indicate that this module can operate concurrently with text generation, introducing less than 5 milliseconds of end-to-end delay per stream chunk.
+
+\section{CONCLUSION}
+This paper presents a multi-tier cognitive firewall architecture that addresses the limitations of existing LLM input validation systems. By integrating a high-throughput semantic shield with a locally-hosted LLM evaluator, the system effectively decouples speed from semantic reasoning. Ablation studies confirm that the combined architecture vastly outperforms standalone filters. The dynamic auto-hardening feedback loop successfully transforms zero-day exploits into permanent defensive rules without human intervention. 
+
+While the system achieved a 99.8\% block rate on unseen data, security failure modes such as database poisoning and embedding evasion require ongoing research. Realistic next steps include integration with a streaming output scanner to prevent data loss (DLP), adaptive calibration of the similarity threshold, and the deployment of canary tokens for attacker attribution.
+
+\section*{Acknowledgment}
+This work was supported by independent computational resources. We thank the open-source community, notably the developers of Qdrant, Llama.cpp, and HuggingFace, for providing the foundational tools for this research.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
